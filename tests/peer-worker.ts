@@ -1,10 +1,12 @@
 import { createInterface } from "node:readline";
 import { Coordinator } from "../src/coordinator.ts";
+import type { Demand, Resources } from "../src/protocol.ts";
 
 // This fixture is started explicitly, not discovered as a bun:test file.
 const directory = process.argv[2];
 if (!directory) throw new Error("缺少测试数据库目录");
-const coordinator = new Coordinator({ directory, label: `worker-${process.pid}` });
+const capacity = { cpu: 8, memoryMB: 8192, gpu: 100 };
+const coordinator = new Coordinator({ directory, label: `worker-${process.pid}`, capacity });
 const input = createInterface({ input: process.stdin, crlfDelay: Infinity });
 const reply = (value: unknown): Promise<void> => {
   const { promise, resolve, reject } = Promise.withResolvers<void>();
@@ -19,12 +21,17 @@ try {
   coordinator.start();
   await reply({ sequence: 0, value: { id: coordinator.id, pid: process.pid } });
   for await (const line of input) {
-    const request = JSON.parse(line) as { sequence: number; action: string; reason?: string; to?: string; text?: string };
+    const request = JSON.parse(line) as {
+      sequence: number; action: string; reason?: string; to?: string; text?: string;
+      demand?: Demand; allocation?: Resources;
+    };
     try {
       let value: unknown;
       switch (request.action) {
         case "snapshot": value = coordinator.snapshot(); break;
-        case "acquire": value = coordinator.acquire(request.reason ?? "测试任务"); break;
+        case "acquire": value = coordinator.acquire(request.reason ?? "测试任务", request.demand ?? {
+          minimum: { cpu: 8, memoryMB: 64, gpu: 0 }, preferred: { cpu: 8, memoryMB: 64, gpu: 0 },
+        }, request.allocation); break;
         case "release": value = coordinator.release(); break;
         case "cancel": value = coordinator.cancel(); break;
         case "send": value = coordinator.send(request.to ?? "*", request.text ?? "测试消息"); break;

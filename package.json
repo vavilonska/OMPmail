@@ -1,7 +1,7 @@
 {
   "name": "omp-mail",
-  "version": "0.1.0",
-  "description": "Local peer discovery, coordination messages, and a shared heavy-task permit for Oh My Pi",
+  "version": "0.2.0",
+  "description": "Local peer discovery, messages, and dynamic resource coordination for parallel Oh My Pi windows",
   "license": "MIT",
   "repository": {
     "type": "git",

@@ -84,7 +84,7 @@ export function isHeavyTool(toolName: string, input: unknown, depth = 0): boolea
 }
 
 export function permitBlock(snapshot: Snapshot): string | undefined {
-  if (snapshot.lease?.ownerId === snapshot.selfId) return undefined;
-  const position = snapshot.queue.findIndex(request => request.ownerId === snapshot.selfId) + 1;
-  return `OMPmail：高资源任务未获许可。请先调用 ompmail(action="acquire", reason="具体任务") 或 /ompmail acquire <原因>，仅在 granted 后执行。持有者：${snapshot.lease?.ownerId ?? '无'}；本窗口排队位置：${position || '未排队'}。排队时可做低资源工作；120 秒内再次 acquire 可保留排队资格。所有异步任务和子代理重任务结束后，由主会话显式 release。`;
+  if (snapshot.leases.some(lease => lease.ownerId === snapshot.selfId)) return undefined;
+  const waiting = snapshot.queue.some(request => request.ownerId === snapshot.selfId);
+  return `OMPmail：本窗口没有实际资源授权，高资源任务已阻止。由主会话调用 acquire，提供 reason 和 demand={minimum:{cpu,memoryMB,gpu},preferred:{cpu,memoryMB,gpu}}，仅 granted 后按实际 allocation 执行；建议 target 或等待状态不是许可。当前 ${snapshot.leases.length} 个窗口持有额度，本窗口${waiting ? '正在等待，120 秒内重试保留资格' : '未申请'}。子代理须通知主会话申请；所有子代理及后台重任务结束后由主会话 release。`;
 }

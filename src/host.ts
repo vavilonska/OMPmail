@@ -1,5 +1,8 @@
-export type Action = 'status' | 'acquire' | 'release' | 'cancel' | 'send' | 'inbox';
-export interface Params { action: Action; reason?: string; to?: string; text?: string }
+import type { Demand, Resources } from './protocol.ts';
+
+export type Action = 'status' | 'acquire' | 'wait' | 'release' | 'cancel' | 'send' | 'inbox';
+export interface Params { action: Action; reason?: string; demand?: Demand; allocation?: Resources; to?: string; text?: string }
+export interface CommandCompletion { value: string; label: string; description?: string }
 export interface ToolResult {
   content: { type: 'text'; text: string }[];
   details: unknown;
@@ -41,8 +44,9 @@ interface EventResults {
 export interface Host {
   zod: {
     string(): Schema;
+    number(): Schema;
     enum(values: readonly string[]): Schema;
-    object(shape: Record<string, Schema>): unknown;
+    object(shape: Record<string, Schema>): Schema;
   };
   registerTool(definition: {
     name: string;
@@ -55,6 +59,7 @@ export interface Host {
   }): void;
   registerCommand(name: string, definition: {
     description: string;
+    getArgumentCompletions?(argumentPrefix: string): CommandCompletion[] | null;
     handler(args: string, ctx: Context): Promise<void>;
   }): void;
   on<K extends keyof Events>(name: K,

@@ -1,10 +1,10 @@
 # OMPmail
 
-**Peer discovery, local messages, and one shared FIFO heavy-task permit for Oh My Pi windows.**
+**Peer discovery, local messages, and dynamic resource coordination for parallel Oh My Pi windows.**
 
-让多个 OMP 窗口发现彼此、互发消息，并排队执行重任务。
+让多个 OMP 窗口发现彼此、协商 CPU／内存／GPU 份额，并行执行任务；竞争结束后恢复正常资源使用。
 
-[快速安装](#安装到每个目标窗口) · [English setup](#installation) · [Download / 下载](https://github.com/vavilonska/OMPmail/releases/latest) · [MIT](LICENSE)
+[安装](#安装到每个目标窗口) · [更新](#更新) · [卸载](#卸载) · [English setup](#installation) · [Download / 下载](https://github.com/vavilonska/OMPmail/releases/latest) · [MIT](LICENSE)
 
 ![OMPmail — conceptual workflow / 功能流程示意](docs/assets/overview.svg)
 
@@ -14,9 +14,9 @@
 
 ## 中文
 
-同一用户、本机多个 **已加载本插件的 omp 进程**之间的窗口发现、协调消息与重任务互斥许可。使用 Bun 内置 SQLite 和 Node 内置模块，无网络服务、无额外运行时 npm 依赖。
+同一用户、本机多个 **已加载本插件的 omp 进程**之间的窗口发现、协调消息与动态资源协商。使用 Bun 内置 SQLite 和 Node 内置模块，无网络服务、无额外运行时 npm 依赖。
 
-它不是进程监控器、系统资源限额器或通用沙箱：不会发现所有程序，也不能阻止任意脚本使用 CPU/GPU/内存。设计目标是让配合协议的模型和操作者先沟通、后运行重任务。
+目标是防止协作窗口把资源耗尽，**不是全局一次只能运行一个重任务**。插件不是进程监控器、系统资源限额器或通用沙箱，不能阻止任意程序使用 CPU/GPU/内存。
 
 ## 安装到每个目标窗口
 
@@ -32,6 +32,8 @@ omp plugin link .
 ```
 
 然后**重新启动每个希望参与协调的 omp 窗口**。仅安装或重启一个窗口不会让其他已运行窗口自动加载插件。不同 profile 默认共用同一份协调数据库。
+
+**从旧独占版本升级：** 先让所有旧窗口完成或停止后台重任务，再退出并统一重启。数据库协议升级到 v2；检测到任何仍存活的旧窗口时会明确拒绝升级，不会夺走旧许可或让两套协议并存。不要删除运行中的状态库绕过检查。源码更新不会热替换已加载的插件。
 
 如只想临时加载一次而不注册链接：
 
@@ -54,28 +56,72 @@ omp
 Remove-Item Env:OMPMAIL_DIR
 ```
 
+## 更新
+
+以下步骤适用于上面的 **Git 克隆 + `omp plugin link .`** 安装方式：
+
+1. 先让所有参与窗口完成或停止重任务，确认子代理与后台进程不再占用额度后释放资源，再关闭这些 omp 窗口。
+2. 在**原先克隆的 OMPmail 目录**中更新源码：
+
+   ```powershell
+   git pull --ff-only
+   ```
+
+   如果有本地修改或分支分叉导致更新失败，先自行保存、提交或处理这些修改；不要用强制重置覆盖自己的代码。
+3. 链接仍指向原目录时，不需要重新安装或再次 `link`。如果移动了源码目录，在新目录重新执行 `omp plugin link .`。
+4. 重新启动全部参与窗口，执行 `/ompmail status` 检查是否正常加载。旧独占协议升级到资源协议时，必须遵守前面的统一退出／重启要求，不能混用新旧窗口。
+
+本地链接的更新方式是更新源码，**不是 `omp plugin upgrade`**；该命令面向 marketplace 插件。日常更新不需要删除协调数据库，也不需要为了运行本插件安装开发依赖。
+
+## 卸载
+
+1. 先完成或停止所有相关任务，确认子代理和后台工作已结束，释放资源并关闭加载了本插件的窗口；不要靠卸载来停止后台进程。
+2. 如果按本页的 `link` 方式安装，在 PowerShell 中执行：
+
+   ```powershell
+   omp plugin uninstall omp-mail
+   omp plugin list
+   ```
+
+   包名是 **`omp-mail`**，不是仓库名 `OMPmail` 或命令名 `ompmail`。在列表中确认已移除；若原先使用了不同 profile 或安装范围，应在相同环境下操作。
+3. 如果仅通过 `omp -e ./src/index.ts` 临时加载，后续启动时去掉该参数即可，无需卸载注册。如果还在启动脚本或配置中手工登记了扩展路径，也要移除对应条目。
+4. 重新启动剩余工作窗口。未卸载的窗口仍受协议约束，已卸载的窗口不再参与协调；不要混用来绕过资源限制。
+
+卸载插件与删除源码／协调数据是不同操作。需要彻底清理时，可在确认不再使用后删除克隆目录；**只有所有使用同一数据库的窗口都退出后**，才可按[隐私、保留与清理](#隐私保留与清理)删除对应状态数据库。不想清除数据则保留即可。
+
 ## 命令与工具
 
 `/ompmail` 默认相当于 `status`。结果为结构化 JSON，窗口标识使用结果中的完整 `id`。
 
+**命令补全：** 输入 `/ompmail ` 后按 Tab，可补全 `status`、`acquire`、`wait`、`release`、`cancel`、`send`、`inbox`，支持前缀筛选。`/ompmail send ` 提供 `*` 和其他参与窗口的名称／完整 ID；输入 ID 前缀也可补全。名单随约两秒心跳更新，不在按键路径访问数据库；进入消息正文或 `acquire` JSON 后不再改写输入。已运行的旧插件没有该回调，需要完成上面的统一升级后使用。
+
 | 命令 | 用途 |
 | --- | --- |
-| `/ompmail status` | 本窗口 ID、参与窗口、当前许可及 FIFO 等待队列 |
-| `/ompmail acquire 构建发布版本` | 申请或刷新重任务许可；返回 `granted` 或 `queued` |
-| `/ompmail release` | 重任务及其后台工作全部结束后，释放本窗口持有的许可 |
-| `/ompmail cancel` | 取消本窗口尚未获准的等待请求，不释放别人或自己的已持有许可 |
-| `/ompmail send <完整窗口ID> 请告知训练预计何时结束` | 向一个参与窗口发送协调消息 |
-| `/ompmail send * 我准备构建，请先完成当前重任务` | 广播给其他参与窗口，不发送给自己 |
-| `/ompmail inbox` | 读取并确认本窗口尚未读到的消息 |
+| `/ompmail status` | 窗口、机器预算、实际 `leases`、待协商请求、动态建议 `recommendations` |
+| `/ompmail acquire <JSON>` | 申请／调整本窗口资源，JSON 包含 `reason`、`demand`，可选 `allocation` |
+| `/ompmail wait` | 对已排队请求进行最多 30 秒的可取消等待，每 2 秒刷新并尝试领取资源 |
+| `/ompmail release` | 所有相关重任务结束后释放本窗口额度 |
+| `/ompmail cancel` | 取消待协商请求，不释放已持有额度 |
+| `/ompmail send <完整窗口ID> <消息>` | 定向沟通资源需求和可调整时机 |
+| `/ompmail send * <消息>` | 广播给其他窗口，不发送给自己 |
+| `/ompmail inbox` | 读取并确认本窗口未读消息 |
 
-模型工具名称为 `ompmail`，`action` 为 `status`、`acquire`、`release`、`cancel`、`send`、`inbox`。`acquire` 使用 `reason`，`send` 使用 `to` 和 `text`，广播收件人为 `*`。例如：
+模型工具为 `ompmail`，支持上述同名 `action`。首次 `acquire` 必须提供 `reason` 和 `demand`；已持有时可沿用原需求。三个资源维度均为非负整数：
+
+- `cpu`：并行 CPU worker／逻辑处理器份额，不是百分比。
+- `memoryMB`：预估峰值物理内存，单位 MiB，须计入子代理及后台任务。
+- `gpu`：本机 GPU 计算和显存压力的**聚合协商百分比**（0–100）。它不是硬件探测结果或单卡显存字节配额；多卡／显存特殊需求还需消息协商，不使用 GPU 时填 0。
+
+`minimum` 是真实可执行、无法继续压缩的下限；`preferred` 是任务正常高效执行所需的份额，不要把上一次竞争时的降额写成永久首选值。例如（数值应按任务与 `status.capacity` 调整）：
 
 ```json
-{"action":"acquire","reason":"执行项目集成测试"}
+{"action":"acquire","reason":"执行项目集成测试","demand":{"minimum":{"cpu":1,"memoryMB":512,"gpu":0},"preferred":{"cpu":8,"memoryMB":2048,"gpu":0}}}
 ```
 
+等价命令是 `/ompmail acquire {"reason":"执行项目集成测试","demand":{"minimum":{"cpu":1,"memoryMB":512,"gpu":0},"preferred":{"cpu":8,"memoryMB":2048,"gpu":0}}}`。
+
 ```json
-{"action":"send","to":"*","text":"本窗口即将运行集成测试，完成后会释放许可。"}
+{"action":"send","to":"*","text":"本窗口可在当前批次完成后降低 worker 数，请协商峰值内存。"}
 ```
 
 ```json
@@ -84,17 +130,22 @@ Remove-Item Env:OMPMAIL_DIR
 
 理由最多 500 字符，消息最多 4000 字符，标签最多 120 字符；拒绝空白或无效载荷及未知收件人。`send` 返回实际收件人数；没有其他窗口时广播人数为 0。
 
-## 重任务协议
+## 动态资源协议
 
-1. 开始 build、test、compile、训练、渲染、ffmpeg 等高资源任务前，先查看状态，必要时发送消息说明意图，再调用 `acquire`。
-2. **只有返回 `status: "granted"` 才可启动重任务。** `position: 0` 表示获准；`queued` 的位置从 1 开始，返回的 `lease` 表示当前持有者，可能为空。
-3. 等待时可以阅读、修改代码、整理计划等低资源工作。按需再次 `acquire` 以刷新排队并尝试领取许可；不要忙循环。排队按事务入队顺序 FIFO，同一窗口不会重复入队。
-4. 许可释放后不会自动转交；队首窗口仍须再次调用 `acquire`。等待请求在 **120 秒内没有再次 acquire** 时过期，普通心跳不会续期请求；过期后重申将重新排队。
-5. 窗口已经持有许可时，重复申请不会重复计数，也不隐式释放。结束后显式 `release`；不再需要排队则 `cancel`。
+1. 重任务前查看 `status`，根据**当前任务实际需要**申报 `minimum`／`preferred`，必要时互发消息协商。额度覆盖本窗口所有子代理、异步／后台任务的总占用。
+2. **只有 `status: "granted"` 才能开始，并以返回的 `allocation` 为准。** 可以同时存在多个已获准窗口。没有资源冲突的请求不必等队首，等待列表不是全局 FIFO 锁。
+3. `recommendations[].target` 是动态建议：优先保留运行任务的真实下限，再按等待顺序选出下限可容纳的并行批次，不冲突的资源可跳过队首；批次内剩余预算均分到首选值。空闲窗口不参与分配。暂时无法纳入的请求建议为 `null`，需继续协商或等待，不能因请求过多把本可并行的任务全部堵死。
+4. **建议不是授权，也不代表资源已释放。** 运行者先实际降低 worker／批次并发等总占用，再通过 `acquire` 的 `allocation` 确认新额度。不能动态降额的进程等到安全批次边界再调整，禁止只改数据库而不改实际占用。
+5. 已持有者不带 `allocation` 再申请时只会保留或增长，不会暗中降额。增长失败时旧额度继续有效，返回 `granted`、`updated: false` 和旧 `allocation`；不能把它误认为新额度获准。
+6. 其他任务释放、取消、退出或等待请求过期后，建议重新计算。**每个重任务／安全批次边界重新查看并申请合适额度；只剩自己时可恢复到 `preferred`，不得继续机械沿用竞争时的旧限制。** 运行参数仍需调用方实际调整，插件不会替已启动进程改 worker 数。
+7. `queued` 时继续可做的低资源工作；确实无事可做时用 **`ompmail wait`，不要用通用 `wait` 等资源，也不要把排队当作任务完成而结束回合**。此专用等待最多 30 秒，期间每 2 秒重申，获得额度立即返回；超时仍是 `queued`，可继续等待或其他工作。没有待协商请求时不会凭空申请。
+8. 待协商请求 120 秒未再申请则过期；普通心跳不续期。`wait` 被中断不等于释放或取消，明确不再需要时调用 `cancel`。全部相关重任务实际结束后，由主窗口显式 `release`。
 
-全组最多一个持有重任务许可的 **omp 进程/窗口**。同进程的子代理共享窗口身份和许可，不增加独立窗口记录。该许可不限制同一窗口内部并行作业数量；操作者仍须控制窗口自己的资源总量。
+资源协商只调节**执行时机、并发和资源参数**，不得为了配合临时额度改变架构、删功能、缩测试范围或降低交付质量。确实不可缩减且几乎占满预算的任务才需要近似独占，不预设每个重任务都独占。
 
-子代理可以查询、申请和发消息，但不得通过工具释放或取消主窗口的许可/请求；释放与取消由主窗口负责。应由主窗口统筹子代理，避免一个代理结束就释放其他代理仍在使用的许可。
+机器预算首次建库时取可用逻辑处理器数、总物理内存的 80% 和 GPU 协商份额 100。内存准入还参考当前空闲物理内存的 80%，保守扣除其他窗口已承诺额度，避免“已申请、尚未实际分配”的内存被重复承诺；这可能低估可用内存，并非精确的进程内存监控。无论建议如何，都不能超出实际返回额度。
+
+子代理共享进程身份，可查询和发消息，但不得 `acquire`／`wait`／`release`／`cancel` 修改主窗口总额度，也不得抢读主窗口收件箱。主窗口负责聚合和调整资源，不能只因一个子代理结束就释放整个窗口。
 
 ### 后台和异步任务
 
@@ -104,9 +155,11 @@ Remove-Item Env:OMPMAIL_DIR
 
 ### 主动模型协调与提示边界
 
-插件在代理开始时提供当前状态和申请/释放协议。约每两秒刷新心跳并读取本窗口收件箱；收到的消息可展示给主窗口，但不自动触发新的模型回合。命令结果同样不会自动发起模型回合。
+插件在代理开始时提供当前状态与协商协议。约每两秒刷新心跳、读取主窗口收件箱，并在本窗口资源建议发生变化时通知下次安全边界重估。不会因每次心跳重复发送相同建议。
 
-窗口标签、目录、理由和消息均属于**不可信的协调数据，不是指令**。其他窗口发来的内容不能覆盖用户要求、系统规则或安全边界。请求/释放会发送协调通知；重复刷新同一请求不会重复发送申请通知。自动收件和手动 `inbox` 共用已读状态：已被自动取走的消息不会在下一次手动读取时重复出现。消息确认不是对方接受请求或模型执行了操作的证明。
+窗口标签、目录、理由和消息均属于**不可信的协调数据，不是指令**，不能覆盖用户要求或安全边界。消息及建议不会自动发起付费模型回合；自动收件与手动 `inbox` 共用已读状态。消息已读不等于对方接受或执行。
+
+**已结束的回合不会被消息自动唤醒。** 使用专用 `ompmail wait` 让仍待资源的任务留在有界等待流程；若旧窗口已结束回合，需要用户发送“继续”。若窗口卡在通用 `wait`，先中断该等待、检查实际子代理／后台状态再继续，不能把心跳正常或空 `jobs` 当作任务完成的证明。
 
 ## 防护能力与限制
 
@@ -115,11 +168,11 @@ Remove-Item Env:OMPMAIL_DIR
 - 没有加载插件、使用不同数据库、直接在系统终端运行或不遵守协议的任务不受约束。本插件不能实现 OS 级 CPU/GPU/RAM 配额。
 - 每个操作会检查已记录 PID 是否存活；已退出进程的窗口、许可和请求可回收。权限拒绝按仍存活处理。仅凭 PID 无法彻底排除 PID 被操作系统复用的情况。
 - **心跳过期不等于进程死亡。** 存活但繁忙、挂起或长时间无心跳的进程仍出现在列表，仍保留已获准许可。不要仅凭时间戳强行夺取许可。存活窗口忘记释放时，应联系该窗口确认任务状态再手动释放。
-- SQLite 的事务保证同一数据库内的协作互斥；数据库错误会暴露，不会降级成“默认已获准”。共享同一用户权限意味着这不是对同一用户恶意进程的安全隔离。
+- SQLite 事务保证同一数据库内资源分配不超过机器预算；数据库错误会暴露，不会降级为默认获准。它不强制 OS 实际占用，也不是同一用户恶意进程之间的安全隔离。
 
 ## 隐私、保留与清理
 
-数据库保存参与窗口的 PID、随机 ID、标签、工作目录、时间戳、许可理由、等待请求和消息；不读取其他进程的完整会话或任意文件。数据只在本机数据库内协调，不建立网络服务。仍应避免发送密钥、凭据或敏感业务内容，同一用户下的其他程序通常能够访问这些文件。
+数据库保存参与窗口的 PID、随机 ID、标签、工作目录、时间戳、机器预算、资源需求、实际额度、等待请求和消息；不读取其他进程的完整会话或任意文件。数据只在本机数据库内协调，不建立网络服务。仍应避免发送密钥、凭据或敏感业务内容。
 
 插件对消息记录做有界保留和清理；不是持久邮件存档，不能承诺永久保存或跨故障严格一次投递。正常关闭释放本窗口记录，崩溃记录在后续操作检查到进程死亡时清理；收件只读取并确认本窗口未读内容。
 
@@ -136,17 +189,13 @@ bun run check
 bun test
 ```
 
-测试使用独立临时目录、真实 SQLite 和多个 Bun 子进程，覆盖初始化争用、互斥/FIFO、消息、取消、过期等待、崩溃回收和存活但心跳陈旧的持有者。`tests/peer-worker.ts` 是被显式启动的进程夹具，不是自动发现的测试文件。测试不会操作默认用户数据库。
+测试使用独立临时目录、真实 SQLite 和多个 Bun 子进程，覆盖并发准入、资源上限、降额确认、单窗口恢复、内存／GPU 冲突、消息、取消、过期等待、崩溃回收、陈旧心跳、主子代理边界和安全协议迁移。`tests/peer-worker.ts` 是显式启动的进程夹具，测试不会操作默认用户数据库。
 
-### 已验证的行为
-
-开源发布检查（2026-09-29）：在 Windows、Bun 1.3.14 下重新运行 `bun run check` 和 `bun test`，类型检查通过，48 项测试通过（129 次断言）。本次未重跑真实 omp RPC 联调。
-
-开发阶段记录：在 Windows、omp 18.4.3、Bun 1.3.14 下，TypeScript 严格检查及 48 项测试通过。另以两个真实 omp RPC 进程加载本插件，验证窗口发现、互斥排队、释放交接、后台收信、持有者被终止后的许可回收，以及退出后的记录清理；过程中没有触发模型回合或扩展错误。该联调验证的是实际宿主与通信行为，不是交互式 TUI 的视觉测试，也不代表后续宿主版本已经验证。
+2026-09-29 在 Windows、Bun 1.3.14、omp 18.4.3 上完成：`bun run check` 通过；`bun test` **64 项通过、0 失败、256 次断言**。两个真实 omp RPC 进程在独立临时数据库中验证 **单窗 16 CPU → 双窗各 8 CPU → 释放后恢复 16 CPU**，并验证专用 `wait`、释放及零模型回合／零扩展错误。另在真实 TUI 中观察 Tab 将 `/ompmail ` 补成 `status`，以及 `send` 的 ID 前缀补成完整窗口 ID。测试进程及临时适配器／数据库已清理。这些是协商与宿主接入验证，不代表 OS 级限额或任务进展监控。
 
 ## English
 
-OMPmail provides peer discovery, coordination messages, and one shared heavy-task permit between **local Oh My Pi (omp) processes that load this plugin**, running as the same OS user. It uses Bun's built-in SQLite and Node built-in modules, with no network service or additional runtime npm dependencies. Plugin messages and status text are currently in Chinese.
+OMPmail provides peer discovery, local messages, and dynamic CPU/RAM/GPU coordination between **local Oh My Pi processes that load the plugin**, running as the same OS user. Multiple heavy tasks can run concurrently. It uses Bun's SQLite and Node built-ins, without a network service or additional runtime dependencies. Plugin messages are currently in Chinese.
 
 This is a cooperation protocol, not a process monitor, OS resource limiter, or general-purpose sandbox. It cannot discover every application or prevent arbitrary programs from using CPU, GPU, or memory.
 
@@ -162,6 +211,8 @@ omp plugin link .
 
 Keep the cloned directory: linking does not copy the source. **Restart every omp window that should participate.** Installing or restarting one window does not load the plugin into other running windows. Profiles share the default coordination database. Loading the plugin neither starts a model turn nor acquires a permit.
 
+Upgrading from the exclusive-permit version requires every old window to finish/stop its background work and exit before restarting. Schema v2 refuses migration while any old peer is alive. Do not delete a live database or mix protocols; already running windows do not hot-reload source changes.
+
 For a temporary session, run `omp -e ./src/index.ts` from the cloned directory instead of registering the link. Do not load the plugin twice in the same process.
 
 The default database is `~/.omp/ompmail/state.sqlite`. For an isolated coordination group, set the same directory in each participating window **before** launching omp:
@@ -175,28 +226,67 @@ Remove-Item Env:OMPMAIL_DIR
 
 Different directories do not coordinate with each other. Use a local directory owned by the current user, not a network share, cross-machine sync folder, or multi-user directory.
 
+### Updating
+
+For the **Git clone + `omp plugin link .`** installation above:
+
+1. Finish or stop all related heavy work, including subagents and background processes. Release allocations, then close every participating omp window.
+2. Run this in the **original OMPmail clone**:
+
+   ```powershell
+   git pull --ff-only
+   ```
+
+   If local changes or diverging branches prevent the update, preserve or resolve them first. Do not forcibly reset away your own changes.
+3. No reinstall or relink is needed while the link points to the same directory. If you move the clone, run `omp plugin link .` from its new location.
+4. Restart every participating window and check `/ompmail status`. Follow the coordinated shutdown/restart requirements above when migrating from the exclusive protocol; do not mix old and new windows.
+
+Update linked source with Git, **not `omp plugin upgrade`**, which targets marketplace plugins. Routine updates do not require deleting coordination state or installing development dependencies just to run this plugin.
+
+### Uninstalling
+
+1. Finish or stop all related work, including subagents and background processes. Release allocations and close windows that loaded the plugin. Uninstalling does not stop background processes.
+2. For the linked installation, run:
+
+   ```powershell
+   omp plugin uninstall omp-mail
+   omp plugin list
+   ```
+
+   The package name is **`omp-mail`**, not the repository name `OMPmail` or slash-command name `ompmail`. Confirm removal in the list. Use the same profile/install scope as the original installation.
+3. For temporary `omp -e ./src/index.ts` loading, omit that argument on future launches; there is no registration to uninstall. Remove any additional manually configured extension paths or startup-script arguments as well.
+4. Restart remaining work windows. Uninstalled windows no longer participate in coordination; do not use a mixed setup to bypass resource limits.
+
+Removing the plugin, deleting its source clone, and clearing coordination state are separate operations. Delete the clone only when no longer needed. Clear the database only **after every window using it has exited**, following [Privacy, retention, and cleanup](#privacy-retention-and-cleanup). Keeping the state is also fine.
+
+
 ### Commands and model tool
 
 `/ompmail` defaults to `status`. Results are structured JSON; use complete window IDs from the result.
 
+**Completion:** type `/ompmail ` and press Tab for prefix-filtered subcommands. `/ompmail send ` offers `*` and other peers' labels/full IDs, including ID-prefix completion. Candidates use the approximately two-second heartbeat cache, without database I/O while typing. Message bodies and acquire JSON are left untouched. Existing windows need the coordinated upgrade above to load the callback.
+
 | Command | Purpose |
 | --- | --- |
-| `/ompmail status` | Show this window's ID, participating peers, the permit, and the FIFO queue |
-| `/ompmail acquire release build` | Request or refresh a permit; returns `granted` or `queued` |
-| `/ompmail release` | Release this window's permit after all related heavy work has finished |
-| `/ompmail cancel` | Cancel this window's pending request without releasing a held permit |
-| `/ompmail send <full-window-id> When will training finish?` | Send a coordination message to one peer |
-| `/ompmail send * Preparing a build` | Broadcast to other participating windows, excluding yourself |
-| `/ompmail inbox` | Read and acknowledge this window's unread messages |
+| `/ompmail status` | Peers, machine budget, actual allocations, pending requests, and recommendations |
+| `/ompmail acquire <JSON>` | Request/adjust resources using `reason`, `demand`, and optional `allocation` |
+| `/ompmail wait` | Cancellable resource wait, at most 30 seconds, retrying every 2 seconds |
+| `/ompmail release` | Release after all related heavy work has actually ended |
+| `/ompmail cancel` | Cancel a pending request, without releasing a held allocation |
+| `/ompmail send <full-window-id> <message>` | Send a coordination message |
+| `/ompmail send * <message>` | Broadcast to other participating windows |
+| `/ompmail inbox` | Read and acknowledge unread messages |
 
-The model tool is named `ompmail`. Its `action` is one of `status`, `acquire`, `release`, `cancel`, `send`, or `inbox`. `acquire` takes `reason`; `send` takes `to` and `text`, with `*` for broadcast:
+The model tool is `ompmail` with the same action names. The first `acquire` requires `reason` and `demand`. Resource vectors use nonnegative integers: `cpu` is logical workers, `memoryMB` is peak RAM in MiB, and `gpu` is an aggregate negotiated percentage (0–100) accounting for compute and VRAM pressure. GPU shares are estimates, not device discovery or per-card VRAM enforcement; coordinate special/multi-GPU needs via messages.
+
+`minimum` is the genuinely irreducible executable demand. `preferred` describes efficient normal operation, **not a permanently pinned reduced share**. Adjust example values to your actual task and `status.capacity`:
 
 ```json
-{"action":"acquire","reason":"Run integration tests"}
+{"action":"acquire","reason":"Run integration tests","demand":{"minimum":{"cpu":1,"memoryMB":512,"gpu":0},"preferred":{"cpu":8,"memoryMB":2048,"gpu":0}}}
 ```
 
 ```json
-{"action":"send","to":"*","text":"This window is preparing integration tests and will release the permit afterward."}
+{"action":"send","to":"*","text":"I can reduce worker concurrency at the next safe batch boundary."}
 ```
 
 ```json
@@ -205,34 +295,41 @@ The model tool is named `ompmail`. Its `action` is one of `status`, `acquire`, `
 
 Reasons are limited to 500 characters, messages to 4,000, and labels to 120. Blank or invalid payloads and unknown recipients are rejected. `send` returns the recipient count; broadcasting with no other peers returns zero.
 
-### Heavy-task protocol
+### Dynamic resource protocol
 
-1. Before builds, tests, compilation, training, rendering, ffmpeg, or other heavy work, check status, communicate if needed, then call `acquire`.
-2. **Start heavy work only after `status: "granted"`.** Position zero means granted; queued positions start at one. The returned `lease` describes the current holder and may be null.
-3. While queued, continue light work such as reading, editing, or planning. Call `acquire` again as needed to refresh the request and attempt to claim the permit; avoid busy polling. Requests follow transactional FIFO order, without duplicate entries for one window.
-4. Releasing a permit does not transfer it automatically: the queue head must call `acquire` again. A waiting request expires after **120 seconds without another `acquire`**. Heartbeats do not refresh requests; an expired requester rejoins at the back.
-5. Repeating `acquire` while holding the permit keeps it held. Explicitly `release` when done; use `cancel` if a queued request is no longer needed.
+1. Inspect status, declare real minimum/preferred demand, and communicate as needed. A window's allocation covers all its subagents and asynchronous/background jobs.
+2. Start heavy work only after `status: "granted"`, within the **returned `allocation`**. Multiple windows may hold allocations. Non-conflicting requests need not wait behind an incompatible queue head.
+3. Recommendations first retain running tasks' minima, then select a runnable cohort of pending requests in arrival order, skipping incompatible requests when independent resources fit. Remaining budget is shared up to preferred demand. Idle peers do not compete. Deferred requests have `target: null`; excess demand must not deadlock an otherwise runnable cohort.
+4. A recommendation is **not permission or proof of reduced usage**. Actually reduce running usage before acknowledging a lower `allocation` via `acquire`. Never shrink the accounting while processes still consume the old resources.
+5. An existing holder's `acquire` without `allocation` only preserves or grows its grant. A refused adjustment keeps the old grant and returns `granted`, `updated: false`, and the old allocation; it does not authorize growth.
+6. Release, cancellation, request expiry, and peer exit recompute recommendations. Reevaluate at each heavy-task/safe-batch boundary. **When contention ends, reacquire up to `preferred` rather than keep stale reduced limits.** The caller must apply actual worker/batch settings.
+7. While queued, continue light work. When blocked solely on resources, use **`ompmail wait`, not generic `wait` or a final answer**. It retries every 2 seconds for up to 30 seconds and returns immediately upon grant. A timeout remains queued. It requires an existing pending request and will not recreate one after cancellation.
+8. Pending requests expire after 120 seconds without reacquisition; heartbeats do not renew them. Aborting `wait` does not release/cancel. Explicitly cancel unwanted requests and release grants after all related work ends.
 
-Only one omp process/window can hold the group's permit. Subagents in that process share its identity and permit. They may query, request, and send messages, but cannot release or cancel the main window's permit/request or read its inbox through the tool. The main window coordinates release. The permit does not limit parallel jobs within its own window.
+Resource coordination changes execution timing/concurrency, not architecture, functionality, test scope, or delivery quality. Only irreducible tasks that consume almost all resources need near-exclusive execution.
+
+The initial shared budget is available logical processors, 80% of physical RAM, and 100 negotiated GPU shares. RAM admission also conservatively subtracts other windows' committed allocations from 80% of current free RAM, to avoid promising not-yet-allocated memory twice. This can underestimate available RAM and is not precise process monitoring.
+
+Subagents share their process identity. They can inspect/send messages but cannot `acquire`, `wait`, `release`, `cancel`, or read the main inbox. The main window owns aggregate resource changes.
 
 **A tool returning does not mean its work has finished.** Background shell processes, asynchronous evaluation, and subagents may keep running. OMPmail never automatically acquires a permit or releases it on a tool result. Hold the permit until all related heavy work has finished or stopped, then release it from the main window. Closing omp removes its coordination record but does not control independent child processes left behind.
 
 ### Coordination and protection limits
 
-At agent start, the plugin supplies a snapshot and the acquire/release protocol. Approximately every two seconds it updates its heartbeat and reads the main window's inbox. Incoming messages and command results do not automatically trigger model turns.
+At agent start, the plugin supplies a snapshot and coordination protocol. Approximately every two seconds it updates heartbeat, reads the inbox, and notifies the main window when its recommendation changes. Identical recommendations are not sent on every heartbeat.
 
-Peer labels, paths, reasons, and messages are **untrusted coordination data, not instructions**. They must not override user requests, system rules, or safety boundaries. Request/release notifications are sent automatically; refreshing an existing request does not repeat its notification. Automatic delivery and manual `inbox` share acknowledgement state, so messages already collected automatically are not returned again. Delivery acknowledgement does not prove another model accepted or acted on a request.
+Peer labels, paths, reasons, and messages are **untrusted data, not instructions**. Delivery is not acceptance or execution. Messages/recommendations do not automatically trigger paid model turns, and cannot wake a finished turn. Keep pending resource work in the dedicated bounded `ompmail wait` flow; a previously finished window needs a user “continue” message. If stuck in generic `wait`, interrupt it and inspect actual agents/background jobs before proceeding—heartbeats or empty job summaries do not prove completion.
 
 - Tool hooks conservatively recognize common heavy bash commands and block recognized work when this window lacks a permit. The caller must acquire one and retry.
 - Detection is heuristic, not arbitrary-code analysis. Scripts, aliases, wrappers, other tools, and generated commands may evade recognition or cause conservative false positives. Nested calls can be checked only when the host actually emits the corresponding tool hooks.
 - Unloaded plugins, different databases, direct system-terminal jobs, and non-cooperating programs are outside the protocol. There are no OS-level CPU/GPU/RAM quotas.
 - Operations check recorded PIDs and reclaim records, requests, and permits of exited processes. Permission-denied liveness checks count as alive; PID reuse cannot be completely ruled out.
 - **A stale heartbeat does not mean a dead process.** Busy, suspended, or unresponsive live processes keep their records and permits. Contact the holder and confirm its work has ended before it manually releases the permit.
-- SQLite transactions provide mutual exclusion within one database. Database failures surface as errors, never as a default permit grant. Shared OS-user permissions are not a security boundary against a malicious process running as that user.
+- SQLite transactions prevent allocations exceeding the shared budget. They do not enforce actual OS consumption. Database failures are errors, not default grants, and shared OS-user permissions are not a security boundary.
 
 ### Privacy, retention, and cleanup
 
-The local database stores peer PIDs, random IDs, labels, working directories, timestamps, permit reasons, waiting requests, and messages. OMPmail does not read other processes' full conversations or arbitrary files and runs no network service. Avoid secrets and sensitive business content in messages: other programs running as the same user can generally access these files.
+The local database stores peer identities, PIDs, labels, paths, timestamps, the machine budget, demands, allocations, pending requests, and messages. OMPmail does not read other sessions or arbitrary files and runs no network service. Avoid secrets in coordination data.
 
 Messages have bounded retention and cleanup; this is not a permanent mailbox or a guarantee of exactly-once delivery across failures. Normal shutdown removes the window's record. Later operations reclaim crashed peers after detecting their exit. Inbox reads acknowledge only the current window's messages.
 
@@ -248,11 +345,9 @@ bun run check
 bun test
 ```
 
-Tests use isolated temporary directories, real SQLite, and multiple Bun child processes. They cover concurrent initialization, mutual exclusion/FIFO, messages, cancellation, request expiry, crash recovery, and live holders with stale heartbeats. `tests/peer-worker.ts` is an explicitly launched fixture, not an automatically discovered test file. Tests do not touch the default user database.
+Tests use isolated temporary directories, real SQLite, and multiple Bun child processes. They cover concurrent admission, limits, acknowledged reductions, single-window recovery, RAM/GPU contention, messaging, cancellation, expiry, crash recovery, stale heartbeats, parent/child boundaries, and safe protocol migration. They do not modify the default user database.
 
-Publication checks on 2026-09-29 reran `bun run check` and `bun test` on Windows with Bun 1.3.14: type checking passed, along with all 48 tests (129 assertions). The real omp RPC integration was not rerun for this publication.
-
-Development records report strict TypeScript checking and 48 passing tests on Windows with omp 18.4.3 and Bun 1.3.14. A previous integration run with two real omp RPC processes covered discovery, queueing, handoff, background inbox delivery, terminated-holder recovery, and shutdown cleanup without model turns or extension errors. That run covered host and communication behavior, not visual TUI testing or later host versions.
+Verified on 2026-09-29 with Windows, Bun 1.3.14, and omp 18.4.3: `bun run check` passed; **64 tests passed, 0 failed, 256 assertions**. Two real omp RPC processes with an isolated database exercised **16 CPU alone → 8 CPU each → 16 CPU restored**, dedicated resource wait, release, zero model turns, and zero extension errors. A real TUI smoke observed Tab completing the subcommand and a send-recipient ID prefix. Smoke processes, the temporary input adapter, and the database were removed. These checks validate coordination and host integration, not OS-level quotas.
 
 ## 许可证 / License
 
