@@ -1,5 +1,15 @@
 # OMPmail
 
+**Peer discovery, local messages, and one shared FIFO heavy-task permit for Oh My Pi windows.**
+
+让多个 OMP 窗口发现彼此、互发消息，并排队执行重任务。
+
+[快速安装](#安装到每个目标窗口) · [English setup](#installation) · [Download / 下载](https://github.com/vavilonska/OMPmail/releases/latest) · [MIT](LICENSE)
+
+![OMPmail — conceptual workflow / 功能流程示意](docs/assets/overview.svg)
+
+> Cooperative protocol; not an OS resource limiter. / 协作协议，不是系统资源限额器。
+
 [中文](#中文) | [English](#english)
 
 ## 中文
@@ -247,3 +257,7 @@ Development records report strict TypeScript checking and 48 passing tests on Wi
 ## 许可证 / License
 
 本项目采用 [MIT 许可证](LICENSE)。 / This project is licensed under the [MIT License](LICENSE).
+
+## Related projects / 相关项目
+
+[OMP Pet](https://github.com/vavilonska/omp-pet) · [TokenLedger OMP](https://github.com/vavilonska/tokenledger-omp) · [All projects / 全部项目](https://github.com/vavilonska#projects--项目)

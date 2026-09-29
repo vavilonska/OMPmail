@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="220" viewBox="0 0 1200 220" role="img" aria-labelledby="title desc">
+<title id="title">OMPmail workflow / 功能流程</title>
+<desc id="desc">Conceptual workflow diagram, not an application screenshot. / 功能示意图，非运行截图。</desc>
+<rect width="1200" height="220" rx="18" fill="#101923"/>
+<g font-family="Segoe UI,Microsoft YaHei,sans-serif">
+<text x="28" y="30" font-size="13" fill="#96a7bb" letter-spacing="2">WORKFLOW / 功能流程示意</text>
+<rect x="28" y="48" width="360" height="144" rx="12" fill="#172535" stroke="#2b3c50"/>
+<text x="48" y="83" font-size="15" font-weight="700" fill="#7dd3fc">01 / DISCOVER</text>
+<text x="48" y="123" font-size="19" fill="#f3f6fb">Find participating windows</text>
+<text x="48" y="156" font-size="17" fill="#acbbce">发现参与窗口</text>
+<path d="M395 118h18m-6-6 6 6-6 6" fill="none" stroke="#7dd3fc" stroke-width="2"/>
+<rect x="420" y="48" width="360" height="144" rx="12" fill="#172535" stroke="#2b3c50"/>
+<text x="440" y="83" font-size="15" font-weight="700" fill="#7dd3fc">02 / COORDINATE</text>
+<text x="440" y="123" font-size="19" fill="#f3f6fb">Send messages and acquire</text>
+<text x="440" y="156" font-size="17" fill="#acbbce">消息沟通、申请许可</text>
+<path d="M787 118h18m-6-6 6 6-6 6" fill="none" stroke="#7dd3fc" stroke-width="2"/>
+<rect x="812" y="48" width="360" height="144" rx="12" fill="#172535" stroke="#2b3c50"/>
+<text x="832" y="83" font-size="15" font-weight="700" fill="#7dd3fc">03 / HAND OFF</text>
+<text x="832" y="123" font-size="19" fill="#f3f6fb">Finish work, then release</text>
+<text x="832" y="156" font-size="17" fill="#acbbce">任务完成后释放许可</text>
+</g></svg>
