@@ -260,4 +260,4 @@ Development records report strict TypeScript checking and 48 passing tests on Wi
 
 ## Related projects / 相关项目
 
-[OMP Pet](https://github.com/vavilonska/omp-pet) · [TokenLedger OMP](https://github.com/vavilonska/tokenledger-omp) · [All projects / 全部项目](https://github.com/vavilonska#projects--项目)
+[OMP Pet](https://github.com/vavilonska/omp-pet) · [TokenLedger OMP](https://github.com/vavilonska/tokenledger-omp) · [All projects / 全部项目](https://github.com/vavilonska?tab=repositories)
