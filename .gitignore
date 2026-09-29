@@ -1,0 +1,9 @@
+node_modules/
+*.tgz
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+.env
+.env.*
+!.env.example
+*.log

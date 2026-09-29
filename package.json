@@ -1,0 +1,27 @@
+{
+  "name": "omp-mail",
+  "version": "0.1.0",
+  "description": "Local peer discovery, coordination messages, and a shared heavy-task permit for Oh My Pi",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vavilonska/OMPmail.git"
+  },
+  "homepage": "https://github.com/vavilonska/OMPmail#readme",
+  "bugs": {
+    "url": "https://github.com/vavilonska/OMPmail/issues"
+  },
+  "private": true,
+  "type": "module",
+  "omp": {
+    "extensions": ["./src/index.ts"]
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "typescript": "^5.9.3"
+  }
+}
